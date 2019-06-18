@@ -7,6 +7,7 @@ _model = None   # type: WaveRNN
 
 def load_model(weights_fpath, verbose=True):
     global _model
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     if verbose:
         print("Building Wave-RNN")
@@ -23,11 +24,15 @@ def load_model(weights_fpath, verbose=True):
         hop_length=hp.hop_length,
         sample_rate=hp.sample_rate,
         mode=hp.voc_mode
-    ).cuda()
+    ).to(device)
     
     if verbose:
         print("Loading model weights at %s" % weights_fpath)
-    checkpoint = torch.load(weights_fpath)
+    if torch.cuda.is_available():
+        map_location = lambda storage, loc: storage.cuda()
+    else:
+        map_location = 'cpu'
+    checkpoint = torch.load(weights_fpath, map_location=map_location)
     _model.load_state_dict(checkpoint['model_state'])
     _model.eval()
 

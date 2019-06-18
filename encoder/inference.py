@@ -31,7 +31,12 @@ def load_model(weights_fpath: Path, device=None):
     elif isinstance(device, str):
         _device = torch.device(device)
     _model = SpeakerEncoder(_device, torch.device("cpu"))
-    checkpoint = torch.load(weights_fpath)
+
+    if torch.cuda.is_available():
+        map_location = lambda storage, loc: storage.cuda()
+    else:
+        map_location = 'cpu'
+    checkpoint = torch.load(weights_fpath, map_location=map_location)
     _model.load_state_dict(checkpoint["model_state"])
     _model.eval()
     print("Loaded encoder \"%s\" trained to step %d" % (weights_fpath.name, checkpoint["step"]))

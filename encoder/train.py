@@ -41,11 +41,16 @@ def train(run_id: str, clean_data_root: Path, models_dir: Path, umap_every: int,
     state_fpath = models_dir.joinpath(run_id + ".pt")
     backup_dir = models_dir.joinpath(run_id + "_backups")
 
+    if torch.cuda.is_available():
+        map_location = lambda storage, loc: storage.cuda()
+    else:
+        map_location = 'cpu'
+
     # Load any existing model
     if not force_restart:
         if state_fpath.exists():
             print("Found existing model \"%s\", loading it and resuming training." % run_id)
-            checkpoint = torch.load(state_fpath)
+            checkpoint = torch.load(state_fpath, map_location=map_location)
             init_step = checkpoint["step"]
             model.load_state_dict(checkpoint["model_state"])
             optimizer.load_state_dict(checkpoint["optimizer_state"])

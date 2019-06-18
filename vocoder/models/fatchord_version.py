@@ -85,11 +85,17 @@ class UpsampleNetwork(nn.Module):
         return m.transpose(1, 2), aux.transpose(1, 2)
 
 
+_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class WaveRNN(nn.Module):
     def __init__(self, rnn_dims, fc_dims, bits, pad, upsample_factors,
                  feat_dims, compute_dims, res_out_dims, res_blocks,
                  hop_length, sample_rate, mode='RAW'):
         super().__init__()
+
+        global _device
+        _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         self.mode = mode
         self.pad = pad
         if self.mode == 'RAW' :
@@ -118,8 +124,8 @@ class WaveRNN(nn.Module):
     def forward(self, x, mels):
         self.step += 1
         bsize = x.size(0)
-        h1 = torch.zeros(1, bsize, self.rnn_dims).cuda()
-        h2 = torch.zeros(1, bsize, self.rnn_dims).cuda()
+        h1 = torch.zeros(1, bsize, self.rnn_dims).to(_device)
+        h2 = torch.zeros(1, bsize, self.rnn_dims).to(_device)
         mels, aux = self.upsample(mels)
 
         aux_idx = [self.aux_dims * i for i in range(5)]
@@ -157,7 +163,7 @@ class WaveRNN(nn.Module):
         rnn2 = self.get_gru_cell(self.rnn2)
 
         with torch.no_grad():
-            mels = mels.cuda()
+            mels = mels.to(_device)
             wave_len = (mels.size(-1) - 1) * self.hop_length
             mels = self.pad_tensor(mels.transpose(1, 2), pad=self.pad, side='both')
             mels, aux = self.upsample(mels.transpose(1, 2))
@@ -168,9 +174,9 @@ class WaveRNN(nn.Module):
 
             b_size, seq_len, _ = mels.size()
 
-            h1 = torch.zeros(b_size, self.rnn_dims).cuda()
-            h2 = torch.zeros(b_size, self.rnn_dims).cuda()
-            x = torch.zeros(b_size, 1).cuda()
+            h1 = torch.zeros(b_size, self.rnn_dims).to(_device)
+            h2 = torch.zeros(b_size, self.rnn_dims).to(_device)
+            x = torch.zeros(b_size, 1).to(_device)
 
             d = self.aux_dims
             aux_split = [aux[:, :, d * i:d * (i + 1)] for i in range(4)]
@@ -201,8 +207,8 @@ class WaveRNN(nn.Module):
                 if self.mode == 'MOL':
                     sample = sample_from_discretized_mix_logistic(logits.unsqueeze(0).transpose(1, 2))
                     output.append(sample.view(-1))
-                    # x = torch.FloatTensor([[sample]]).cuda()
-                    x = sample.transpose(0, 1).cuda()
+                    # x = torch.FloatTensor([[sample]]).to(_device)
+                    x = sample.transpose(0, 1).to(_device)
 
                 elif self.mode == 'RAW' :
                     posterior = F.softmax(logits, dim=1)
@@ -260,7 +266,7 @@ class WaveRNN(nn.Module):
         # i.e., it won't generalise to other shapes/dims
         b, t, c = x.size()
         total = t + 2 * pad if side == 'both' else t + pad
-        padded = torch.zeros(b, total, c).cuda()
+        padded = torch.zeros(b, total, c).to(_device)
         if side == 'before' or side == 'both':
             padded[:, pad:pad + t, :] = x
         elif side == 'after':
@@ -306,7 +312,7 @@ class WaveRNN(nn.Module):
             padding = target + 2 * overlap - remaining
             x = self.pad_tensor(x, padding, side='after')
 
-        folded = torch.zeros(num_folds, target + 2 * overlap, features).cuda()
+        folded = torch.zeros(num_folds, target + 2 * overlap, features).to(_device)
 
         # Get the values for the folded tensor
         for i in range(num_folds):
@@ -392,7 +398,11 @@ class WaveRNN(nn.Module):
             print(msg, file=f)
 
     def load(self, path, optimizer) :
-        checkpoint = torch.load(path)
+        if torch.cuda.is_available():
+            map_location = lambda storage, loc: storage.cuda()
+        else:
+            map_location = 'cpu'
+        checkpoint = torch.load(path, map_location=map_location)
         if "optimizer_state" in checkpoint:
             self.load_state_dict(checkpoint["model_state"])
             optimizer.load_state_dict(checkpoint["optimizer_state"])

@@ -4,9 +4,14 @@ import torch.nn.functional as F
 from utils.display import *
 from utils.dsp import *
 
+_device = None
+
 class WaveRNN(nn.Module) :
     def __init__(self, hidden_size=896, quantisation=256) :
         super(WaveRNN, self).__init__()
+
+        global _device
+        _device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.hidden_size = hidden_size
         self.split_size = hidden_size // 2
@@ -82,8 +87,8 @@ class WaveRNN(nn.Module) :
             c_outputs, f_outputs = [], []
 
             # Some initial inputs
-            out_coarse = torch.LongTensor([0]).cuda()
-            out_fine = torch.LongTensor([0]).cuda()
+            out_coarse = torch.LongTensor([0]).to(_device)
+            out_fine = torch.LongTensor([0]).to(_device)
 
             # We'll meed a hidden state
             hidden = self.init_hidden()
@@ -161,7 +166,7 @@ class WaveRNN(nn.Module) :
         return output, coarse, fine
 
     def init_hidden(self, batch_size=1) :
-        return torch.zeros(batch_size, self.hidden_size).cuda()
+        return torch.zeros(batch_size, self.hidden_size).to(_device)
     
     def num_params(self) :
         parameters = filter(lambda p: p.requires_grad, self.parameters())

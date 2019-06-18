@@ -11,11 +11,12 @@ import vocoder.hparams as hp
 import numpy as np
 import time
 
-
 def train(run_id: str, syn_dir: Path, voc_dir: Path, models_dir: Path, ground_truth: bool,
           save_every: int, backup_every: int, force_restart: bool):
     # Check to make sure the hop length is correctly factorised
     assert np.cumprod(hp.voc_upsample_factors)[-1] == hp.hop_length
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Instantiate the model
     print("Initializing the model...")
@@ -32,7 +33,7 @@ def train(run_id: str, syn_dir: Path, voc_dir: Path, models_dir: Path, ground_tr
         hop_length=hp.hop_length,
         sample_rate=hp.sample_rate,
         mode=hp.voc_mode
-    ).cuda()
+    ).to(device)
        
     # Initialize the optimizer
     optimizer = optim.Adam(model.parameters())
@@ -79,7 +80,7 @@ def train(run_id: str, syn_dir: Path, voc_dir: Path, models_dir: Path, ground_tr
         running_loss = 0.
 
         for i, (x, y, m) in enumerate(data_loader, 1):
-            x, m, y = x.cuda(), m.cuda(), y.cuda()
+            x, m, y = x.to(device), m.to(device), y.to(device)
             
             # Forward pass
             y_hat = model(x, m)
